@@ -3,12 +3,12 @@
 
 #define DRIVE_STEPPER
 
-#define ENABLE_SERIAL 1
+#define ENABLE_SERIAL 0
 #define IF_SERIAL if (ENABLE_SERIAL)
 
 #define STEPPER_STEPS 800
-#define MAX_SPEED_STEPS_PER_SEC 1000
-#define DRIVE_US (100 * 1000)
+#define MAX_SPEED_STEPS_PER_SEC 3000
+#define DRIVE_MS 200
 #define RC_TIMEOUT_S 15
 #define THROTTLE_WEIGHT 100
 #define STEERING_WEIGHT 100
@@ -85,6 +85,7 @@ void loop() {
   IF_SERIAL Serial.println();
 
   if (millis() > last_ppm_signal + RC_TIMEOUT_S * 1000 || millis() < last_ppm_signal) {
+    IF_SERIAL Serial.println("Resetting receiver...");
     digitalWrite(RC_POWER_PIN, LOW);
     delay(100);
     digitalWrite(RC_POWER_PIN, HIGH);
@@ -134,9 +135,9 @@ void drive_stepper(int left_speed, int right_speed) {
   right_stepper.setSpeed(map(right_speed, -THROTTLE_WEIGHT, THROTTLE_WEIGHT,
     -MAX_SPEED_STEPS_PER_SEC, MAX_SPEED_STEPS_PER_SEC));
 
-  unsigned long start = micros();
+  long start = millis();
   bool done = 1;
-  while (micros() < start + DRIVE_US && micros() > start - 1) {
+  while (millis() < start + DRIVE_MS && millis() > start - 1) {
     if (left_stepper.runSpeed()) done = 0;
     if (right_stepper.runSpeed()) done = 0;
   }
