@@ -28,23 +28,28 @@
 #define R_STEPPER_PIN_I2 9
 #define R_STEPPER_PIN_I3 10
 #define R_STEPPER_PIN_I4 11
+
+#define AC_RELAY_CONTROL_PIN 13
+
 AccelStepper left_stepper(AccelStepper::FULL4WIRE,
     L_STEPPER_PIN_I1, L_STEPPER_PIN_I2, L_STEPPER_PIN_I3, L_STEPPER_PIN_I4);
 AccelStepper right_stepper(AccelStepper::FULL4WIRE,
     R_STEPPER_PIN_I1, R_STEPPER_PIN_I2, R_STEPPER_PIN_I3, R_STEPPER_PIN_I4);
 
-#define AC_RELAY_CONTROL_PIN 13
+
 #define NUM_CHANNELS 6
 
 #define CHANNEL_R_EW 0
 #define CHANNEL_R_NS 1
 #define CHANNEL_L_NS 2
 #define CHANNEL_L_EW 3
+#define CHANNEL_SWA 4
 #define CHANNEL_SWB 5
 
 #define CHANNEL_THROTTLE CHANNEL_L_NS
 #define CHANNEL_STEERING CHANNEL_R_EW
 #define CHANNEL_AC_RELAY CHANNEL_SWB
+#define CHANNEL_ENABLE_DRIVE CHANNEL_SWA
 
 PPMReader ppm(INTERRUPT_PIN, NUM_CHANNELS);
 unsigned long last_ppm_signal = 0;
@@ -97,11 +102,13 @@ void loop() {
       digitalWrite(AC_RELAY_CONTROL_PIN, LOW);
     }
 
-    drive(
-      map(channel_values[CHANNEL_THROTTLE],
-          PPM_LOW, PPM_HIGH, -THROTTLE_WEIGHT, THROTTLE_WEIGHT),
-      map(channel_values[CHANNEL_STEERING],
-          PPM_LOW, PPM_HIGH, -STEERING_WEIGHT, STEERING_WEIGHT));
+   if (channel_values[CHANNEL_ENABLE_DRIVE] > PPM_CENTER) {
+      drive(
+        map(channel_values[CHANNEL_THROTTLE],
+            PPM_LOW, PPM_HIGH, -THROTTLE_WEIGHT, THROTTLE_WEIGHT),
+        map(channel_values[CHANNEL_STEERING],
+            PPM_LOW, PPM_HIGH, -STEERING_WEIGHT, STEERING_WEIGHT));
+   }
     delayMicroseconds(1);
   }
 }
