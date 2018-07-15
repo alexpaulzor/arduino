@@ -7,9 +7,9 @@
 #define IF_SERIAL if (ENABLE_SERIAL)
 
 #define STEPPER_STEPS 800
-#define MAX_SPEED_STEPS_PER_SEC 3000
-#define DRIVE_MS 200
-#define RC_TIMEOUT_S 15
+#define MAX_SPEED_STEPS_PER_SEC 1600
+#define DRIVE_MS 500
+#define RC_TIMEOUT_S 5
 #define THROTTLE_WEIGHT 100
 #define STEERING_WEIGHT 100
 #define PPM_LOW 1000
@@ -54,6 +54,15 @@ AccelStepper right_stepper(AccelStepper::FULL4WIRE,
 PPMReader ppm(INTERRUPT_PIN, NUM_CHANNELS);
 unsigned long last_ppm_signal = 0;
 
+void blink(int count, int interval) {
+  for (int i = 0; i < count; i++) {
+    digitalWrite(STATUS_LED_PIN, HIGH);
+    delay(interval);
+    digitalWrite(STATUS_LED_PIN, LOW);
+    delay(interval);
+  }
+}
+
 void setup() {
   IF_SERIAL Serial.begin(9600);
   pinMode(STATUS_LED_PIN, OUTPUT);
@@ -62,13 +71,7 @@ void setup() {
   digitalWrite(AC_RELAY_CONTROL_PIN, LOW);
   pinMode(RC_POWER_PIN, OUTPUT);
   digitalWrite(RC_POWER_PIN, LOW);
-
-  for (int i = 0; i < 10; i++) {
-    digitalWrite(STATUS_LED_PIN, HIGH);
-    delay(100);
-    digitalWrite(STATUS_LED_PIN, LOW);
-    delay(100);
-  }
+  blink(5, 200);
   digitalWrite(RC_POWER_PIN, HIGH);
   left_stepper.setMaxSpeed(MAX_SPEED_STEPS_PER_SEC);
   right_stepper.setMaxSpeed(MAX_SPEED_STEPS_PER_SEC);
@@ -92,7 +95,7 @@ void loop() {
   if (millis() > last_ppm_signal + RC_TIMEOUT_S * 1000 || millis() < last_ppm_signal) {
     IF_SERIAL Serial.println("Resetting receiver...");
     digitalWrite(RC_POWER_PIN, LOW);
-    delay(100);
+    blink(3, 100);
     digitalWrite(RC_POWER_PIN, HIGH);
   } else {
 
@@ -109,7 +112,6 @@ void loop() {
         map(channel_values[CHANNEL_STEERING],
             PPM_LOW, PPM_HIGH, -STEERING_WEIGHT, STEERING_WEIGHT));
    }
-    delayMicroseconds(1);
   }
 }
 
