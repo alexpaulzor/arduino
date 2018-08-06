@@ -151,10 +151,10 @@ void drive(int throttle_pct, int steering_pct) {
 //  int right_steering = abs(max(-steering_pct, steering_pct));
   int left_speed = throttle_pct + steering_pct;
   int right_speed = throttle_pct - steering_pct;
-  if (throttle_pct < 0) {
-    left_speed = -left_speed;
-    right_speed = -right_speed;
-  }
+//  if (throttle_pct < 0) {
+//    left_speed = -left_speed;
+//    right_speed = -right_speed;
+//  }
 
   IF_SERIAL Serial.println(
     "T: " + String(throttle_pct) +
