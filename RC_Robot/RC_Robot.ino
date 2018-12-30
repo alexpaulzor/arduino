@@ -7,7 +7,7 @@
 #define ARM_MICROSTEP 1
 #undef ARM_L298N
 
-#define DRIVE_MS 100
+#define DRIVE_MS 200
 #define RC_TIMEOUT_S 3
 #define THROTTLE_WEIGHT 100
 #define STEERING_WEIGHT 100
@@ -32,13 +32,12 @@
 
 #ifdef ARM_MICROSTEP
   #define STEPPER_STEPS_PER_REV 200
-  #define MAX_SPEED_STEPS_PER_SEC 400
+  #define MAX_SPEED_STEPS_PER_SEC 800
   #define H_STEPPER_PIN_ENABLE 51
   #define H_STEPPER_PIN_DIR 52
   #define H_STEPPER_PIN_PUL 53
   AccelStepper height_stepper(AccelStepper::DRIVER,
       H_STEPPER_PIN_PUL, H_STEPPER_PIN_DIR);
-  height_stepper.setEnablePin(H_STEPPER_PIN_ENABLE);
 #endif
 
 #define H_STEPPER_MAX_STEPS 20000  // TODO: measure
@@ -97,6 +96,7 @@ void setup() {
   digitalWrite(RC_POWER_PIN, LOW);
   blink(5, 200);
   digitalWrite(RC_POWER_PIN, HIGH);
+  height_stepper.setEnablePin(H_STEPPER_PIN_ENABLE);
   height_stepper.setMaxSpeed(MAX_SPEED_STEPS_PER_SEC);
   height_stepper.setSpeed(0);
   height_stepper.setCurrentPosition(H_STEPPER_MAX_STEPS);
@@ -120,13 +120,13 @@ void loop() {
   // Print latest valid values from all channels
   for (int channel = 1; channel <= NUM_CHANNELS; ++channel) {
     int value = ppm.latestValidChannelValue(channel, 0);
-    IF_SERIAL Serial.print(String(value) + " ");
+//    IF_SERIAL Serial.print(String(value) + " ");
     if (value != channel_values[channel - 1]) {
       last_ppm_signal = millis();
     }
     channel_values[channel - 1] = value;
   }
-  IF_SERIAL Serial.println();
+//  IF_SERIAL Serial.println();
 
   if (millis() > last_ppm_signal + RC_TIMEOUT_S * 1000 || millis() < last_ppm_signal) {
     IF_SERIAL Serial.println("Resetting receiver...");
@@ -165,11 +165,14 @@ void drive(int throttle_pct, int steering_pct, long height_steps) {
     "T: " + String(throttle_pct) +
     "; S: " + String(steering_pct) +
     "; -> L=" + String(left_speed) +
-    "; R=" + String(right_speed));
+    "; R=" + String(right_speed) + 
+    "; H=" + String(height_stepper.currentPosition()) +
+    " -> " + String(height_steps)
+    );
 
   digitalWrite(STATUS_LED_PIN, HIGH);
   drive_motors(left_speed, right_speed);
-  drive_height(height);
+  drive_height(height_steps);
   digitalWrite(STATUS_LED_PIN, LOW);
 }
 
