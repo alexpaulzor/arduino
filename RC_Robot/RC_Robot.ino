@@ -7,8 +7,8 @@
 #define ARM_MICROSTEP 1
 #undef ARM_L298N
 
-#define DRIVE_MS 200
-#define RC_TIMEOUT_S 8
+#define DRIVE_MS 2000
+#define RC_TIMEOUT_S 3
 #define THROTTLE_WEIGHT 100
 #define STEERING_WEIGHT 100
 #define PPM_LOW 1000
@@ -32,7 +32,7 @@
 
 #ifdef ARM_MICROSTEP
   #define STEPPER_STEPS_PER_REV 200
-  #define MAX_SPEED_STEPS_PER_SEC 800
+  #define MAX_SPEED_STEPS_PER_SEC (STEPPER_STEPS_PER_REV / 2)
   #define H_STEPPER_PIN_ENABLE 51
   #define H_STEPPER_PIN_DIR 52
   #define H_STEPPER_PIN_PUL 53
@@ -96,9 +96,28 @@ void setup() {
   digitalWrite(RC_POWER_PIN, LOW);
   blink(5, 200);
   digitalWrite(RC_POWER_PIN, HIGH);
-  height_stepper.setEnablePin(H_STEPPER_PIN_ENABLE);
+  pinMode(H_STEPPER_PIN_ENABLE, OUTPUT);
+  digitalWrite(H_STEPPER_PIN_ENABLE, HIGH);
+  digitalWrite(H_STEPPER_PIN_ENABLE, LOW);
+  
+//  height_stepper.setEnablePin(H_STEPPER_PIN_ENABLE);
   height_stepper.setMaxSpeed(MAX_SPEED_STEPS_PER_SEC);
-  height_stepper.setSpeed(0);
+  height_stepper.setSpeed(MAX_SPEED_STEPS_PER_SEC);
+  IF_SERIAL Serial.println("runSpeed(0) @ " + String(height_stepper.speed()) + " (" + String(height_stepper.currentPosition()));
+  long m = millis();
+  while (millis() < m + 10000) {
+    for (int i = 0; i < MAX_SPEED_STEPS_PER_SEC; i++) {
+      height_stepper.runSpeed(); 
+    }
+  }
+  IF_SERIAL Serial.println("runSpeed(1) @ " + String(height_stepper.speed()) + " (" + String(height_stepper.currentPosition()));
+  height_stepper.setSpeed(-MAX_SPEED_STEPS_PER_SEC);
+  while (millis() < m + 10000) {
+    for (int i = 0; i < MAX_SPEED_STEPS_PER_SEC; i++) {
+      height_stepper.runSpeed();       
+    }
+    IF_SERIAL Serial.println("runSpeed(2) @ " + String(height_stepper.speed()) + " (" + String(height_stepper.currentPosition()));
+  }
   height_stepper.setCurrentPosition(H_STEPPER_MAX_STEPS);
  
   pinMode(L_FORWARD_PIN, OUTPUT);
@@ -113,6 +132,12 @@ void setup() {
   pinMode(H_STEPPER_HOME_SW_PIN, INPUT);
   
   stop_motors();
+
+  while (!arm_at_home()) {
+    drive_height(0);
+  }
+  
+  IF_SERIAL Serial.println("setup() complete");
 }
 
 void loop() {
@@ -128,12 +153,13 @@ void loop() {
   }
 //  IF_SERIAL Serial.println();
 
-  if (millis() > last_ppm_signal + RC_TIMEOUT_S * 1000 || millis() < last_ppm_signal) {
+  if (millis() > (last_ppm_signal + RC_TIMEOUT_S * 1000) || millis() < last_ppm_signal) {
     IF_SERIAL Serial.println("Resetting receiver...");
     stop_motors();
     digitalWrite(RC_POWER_PIN, LOW);
     blink(3, 100);
     digitalWrite(RC_POWER_PIN, HIGH);
+    last_ppm_signal = millis();
   } else {
 
     if (channel_values[CHANNEL_AC_RELAY] > PPM_CENTER) {
@@ -177,27 +203,32 @@ void drive(int throttle_pct, int steering_pct, long height_steps) {
 }
 
 void drive_height(long height_steps) {
+  long steps_off = height_steps - height_stepper.currentPosition();
+  int dir = steps_off / abs(steps_off);
+  bool at_home = arm_at_home();
   if (height_steps < H_STEPPER_HOME_THRESH) {
     home_height();
-//  } else if (abs(height_steps - height_stepper.currentPosition()) < H_STEPPER_FUZZ) {
-//    // height_stepper.disableOutputs();
-//    return;
+  } else if (at_home || steps_off < H_STEPPER_FUZZ) {
+    height_stepper.setSpeed(0);
   } else {
     height_stepper.moveTo(height_steps);
+    height_stepper.setSpeed(dir * MAX_SPEED_STEPS_PER_SEC);
   }
   // height_stepper.enableOutputs();
   long start = millis();
-  bool done = 1;
-  int dir = height_stepper.distanceToGo() / abs(height_stepper.distanceToGo());
-  height_stepper.setSpeed(dir * MAX_SPEED_STEPS_PER_SEC);
-  while (millis() < start + DRIVE_MS && millis() > start - 1 && !arm_at_home() && height_stepper.runSpeed()) {
-    height_stepper.runSpeed();
+  IF_SERIAL Serial.println("runSpeed() @ " + String(height_stepper.speed()) + " (" + String(steps_off));
+  while (millis() < start + DRIVE_MS && millis() > start - 1 && height_stepper.runSpeed()) {
+//    height_stepper.runSpeed();
+    //steps_off = height_steps - height_stepper.currentPosition();
+    //
   }
 }
 
 void home_height() {
+  IF_SERIAL Serial.println("Homing...");
   if (!arm_at_home()) {
-    height_stepper.move(-H_STEPPER_FUZZ);
+    height_stepper.moveTo(0);
+    height_stepper.setSpeed(MAX_SPEED_STEPS_PER_SEC);
   } else {
     IF_SERIAL Serial.println("Setting height=0");
     height_stepper.setCurrentPosition(0);
@@ -207,12 +238,12 @@ void home_height() {
 
 bool arm_at_home() {
   int home_sw = digitalRead(H_STEPPER_HOME_SW_PIN);
-  IF_SERIAL Serial.println("home=" + String(home_sw));
-  return (home_sw == HIGH); /* {
+  if (home_sw == HIGH) {
     height_stepper.setCurrentPosition(0);
+    IF_SERIAL Serial.println("home=" + String(home_sw));
     return true;
   }
-  return false;*/
+  return false;
 }
 
 void stop_motors() {
