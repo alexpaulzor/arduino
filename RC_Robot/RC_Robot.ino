@@ -1,14 +1,14 @@
 #include <PPMReader.h>
 #include <AccelStepper.h>
 
-#define ENABLE_SERIAL 0
+#define ENABLE_SERIAL 1
 #define IF_SERIAL if (ENABLE_SERIAL)
 
 #define ARM_MICROSTEP 1
 #undef ARM_L298N
 
 #define DRIVE_MS 200
-#define RC_TIMEOUT_S 3
+#define RC_TIMEOUT_S 8
 #define THROTTLE_WEIGHT 100
 #define STEERING_WEIGHT 100
 #define PPM_LOW 1000
@@ -179,19 +179,19 @@ void drive(int throttle_pct, int steering_pct, long height_steps) {
 void drive_height(long height_steps) {
   if (height_steps < H_STEPPER_HOME_THRESH) {
     home_height();
-  } else if (abs(height_steps - height_stepper.currentPosition()) < H_STEPPER_FUZZ) {
-    height_stepper.disableOutputs();
-    return;
+//  } else if (abs(height_steps - height_stepper.currentPosition()) < H_STEPPER_FUZZ) {
+//    // height_stepper.disableOutputs();
+//    return;
   } else {
     height_stepper.moveTo(height_steps);
   }
-  height_stepper.enableOutputs();
+  // height_stepper.enableOutputs();
   long start = millis();
   bool done = 1;
   int dir = height_stepper.distanceToGo() / abs(height_stepper.distanceToGo());
   height_stepper.setSpeed(dir * MAX_SPEED_STEPS_PER_SEC);
   while (millis() < start + DRIVE_MS && millis() > start - 1 && !arm_at_home() && height_stepper.runSpeed()) {
-    // let the stepper run
+    height_stepper.runSpeed();
   }
 }
 
@@ -199,17 +199,20 @@ void home_height() {
   if (!arm_at_home()) {
     height_stepper.move(-H_STEPPER_FUZZ);
   } else {
+    IF_SERIAL Serial.println("Setting height=0");
     height_stepper.setCurrentPosition(0);
-    height_stepper.disableOutputs();
+    // height_stepper.disableOutputs();
   }
 }
 
 bool arm_at_home() {
-  if (digitalRead(H_STEPPER_HOME_SW_PIN) == HIGH) {
+  int home_sw = digitalRead(H_STEPPER_HOME_SW_PIN);
+  IF_SERIAL Serial.println("home=" + String(home_sw));
+  return (home_sw == HIGH); /* {
     height_stepper.setCurrentPosition(0);
     return true;
   }
-  return false;
+  return false;*/
 }
 
 void stop_motors() {
@@ -223,7 +226,7 @@ void stop_motors() {
   digitalWrite(R_REVERSE_SPEED_PIN, LOW);
 
   height_stepper.setSpeed(0);
-  height_stepper.disableOutputs();
+  // height_stepper.disableOutputs();
 }
 
 void drive_motors(int left_speed, int right_speed) {
