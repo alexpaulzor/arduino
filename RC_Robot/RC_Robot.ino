@@ -7,10 +7,10 @@
 #define ARM_MICROSTEP 1
 //#define ARM_L298N 1
 
-#define DRIVE_MS 250
+#define DRIVE_MS 150
 #define RC_TIMEOUT_S 3
-#define THROTTLE_WEIGHT 100
-#define STEERING_WEIGHT 100
+#define THROTTLE_WEIGHT 255
+#define STEERING_WEIGHT 255
 #define PPM_LOW 1000
 #define PPM_HIGH 2000
 #define PPM_CENTER ((PPM_LOW + PPM_HIGH) / 2)
@@ -48,6 +48,8 @@
 #define HEIGHT_WEIGHT H_STEPPER_MAX_STEPS
   
 #define PWM_MAX 255
+#define PWM_MAX_STEP (PWM_MAX / 4)
+//#define PWM_MAX_FACTOR 
 #define L_FORWARD_PIN 4
 #define L_FORWARD_SPEED_PIN 5
 #define L_REVERSE_SPEED_PIN 6
@@ -77,6 +79,9 @@
 
 PPMReader ppm(INTERRUPT_PIN, NUM_CHANNELS);
 unsigned long last_ppm_signal = 0;
+unsigned long last_drive = 0;
+int left_speed = 0;
+int right_speed = 0;
 
 void blink(int count, int interval) {
   for (int i = 0; i < count; i++) {
@@ -166,9 +171,21 @@ void loop() {
 }
 
 void drive(int throttle_pct, int steering_pct, long height_steps) {
-  int left_speed = throttle_pct + steering_pct;
-  int right_speed = throttle_pct - steering_pct;
-
+  unsigned long now = millis();
+  if (now - last_drive > DRIVE_MS) {
+    int old_left_speed = left_speed;
+    int old_right_speed = right_speed;
+  
+    int min_left = old_left_speed - PWM_MAX_STEP; // old_left_speed / PWM_MAX_FACTOR;
+    int max_left = old_left_speed + PWM_MAX_STEP; //old_left_speed / PWM_MAX_FACTOR;
+  
+    int min_right = old_right_speed - PWM_MAX_STEP; //old_right_speed / PWM_MAX_FACTOR;
+    int max_right = old_right_speed + PWM_MAX_STEP; //old_right_speed / PWM_MAX_FACTOR;
+    // restrict throttle changes to a multiple of previous speed
+    left_speed = constrain(throttle_pct + steering_pct, max(min(min_left, max_left), -PWM_MAX), min(max(min_left, max_left), PWM_MAX));
+    right_speed = constrain(throttle_pct - steering_pct, max(min(min_right, max_right), -PWM_MAX), min(max(min_right, max_right), PWM_MAX));
+    last_drive = now;
+  }
   IF_SERIAL Serial.println(
     "T: " + String(throttle_pct) +
     "; S: " + String(steering_pct) +
@@ -247,6 +264,7 @@ void stop_motors() {
 }
 
 void drive_motors(int left_speed, int right_speed) {
+  //return;
   analogWrite(
     (left_speed < 0 ? L_REVERSE_SPEED_PIN : L_FORWARD_SPEED_PIN),
     constrain(map(abs(left_speed), 0, THROTTLE_WEIGHT, 0, PWM_MAX), 0, PWM_MAX));
