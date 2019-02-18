@@ -117,13 +117,13 @@ void setup() {
   height_stepper.setEnablePin(H_STEPPER_PIN_ENABLE);
   //height_stepper.setPinsInverted(directionInvert = false, stepInvert = false, enableInvert = false);
   height_stepper.setPinsInverted(true, false, false);
- 
-  height_stepper.setMaxSpeed(MAX_SPEED_STEPS_PER_SEC);
-  height_stepper.setSpeed(MAX_SPEED_STEPS_PER_SEC);
-  height_stepper.setCurrentPosition(H_STEPPER_MAX_STEPS);
-  
   stop_motors();
-
+  height_stepper.setMaxSpeed(MAX_SPEED_STEPS_PER_SEC);
+  height_stepper.setCurrentPosition(H_STEPPER_MAX_STEPS);
+  while (!drive_height(0)) {
+    // Homing...
+  }
+ 
   IF_SERIAL Serial.println("setup() complete");
 }
 
@@ -202,47 +202,37 @@ void drive(int throttle_pct, int steering_pct, long height_steps) {
   digitalWrite(STATUS_LED_PIN, LOW);
 }
 
-void drive_height(long height_steps) {
-  bool at_home = arm_at_home();
-  long steps_off = height_steps - height_stepper.currentPosition();
+void drive_height(long desired_position) {
+  bool at_home = arm_at_home(desired_position);
+  if (desired_position < H_STEPPER_FUZZ && !at_home) {
+    // Home zero was broken, seek to negative
+    desired_position = height_stepper.currentPosition() - MAX_SPEED_STEPS_PER_SEC;
+  } 
+  long steps_off = desired_position - height_stepper.currentPosition();
   int dir = steps_off / abs(steps_off);
-  if (abs(steps_off) < H_STEPPER_FUZZ) {
+  if (abs(steps_off) < H_STEPPER_FUZZ || (desired_position < H_STEPPER_FUZZ && at_home)) {
     height_stepper.setSpeed(0);
+    return true;
   } else {
-    height_stepper.moveTo(height_steps);
+    height_stepper.moveTo(desired_position);
     height_stepper.setSpeed(dir * MAX_SPEED_STEPS_PER_SEC);
   }
   // height_stepper.enableOutputs();
   long start = millis();
   //IF_SERIAL Serial.println("runSpeed() @ " + String(height_stepper.speed()) + " (" + String(steps_off));
   while (millis() < start + DRIVE_MS && millis() > start - 1 && height_stepper.runSpeed()) {
-//    height_stepper.runSpeed();
-    //steps_off = height_steps - height_stepper.currentPosition();
-    //
+    // wait
   }
+  return false;
 }
-/*
-void home_height() {
-  IF_SERIAL Serial.println("Homing...");
-  if (!arm_at_home()) {
-    height_stepper.moveTo(0);
-    height_stepper.setSpeed(-MAX_SPEED_STEPS_PER_SEC);
-  } else {
-    IF_SERIAL Serial.println("Setting height=0");
-    height_stepper.setCurrentPosition(0);
-    height_stepper.moveTo(0);
-    height_stepper.setSpeed(0);
-    // height_stepper.disableOutputs();
-  }
-}*/
 
-bool arm_at_home() {
-  if (height_stepper.currentPosition() < H_STEPPER_FUZZ) {
-    return true;
-  }
+bool arm_at_home(long desired_position) {
   int home_sw = digitalRead(H_STEPPER_HOME_SW_PIN);
   if (home_sw == HIGH) {
-    height_stepper.setCurrentPosition(0);
+    if (desired_position < H_STEPPER_FUZZ) {
+      // Only reset position if we are trying to home
+      height_stepper.setCurrentPosition(0);
+    }
     IF_SERIAL Serial.println("home=" + String(home_sw));
     return true;
   }
